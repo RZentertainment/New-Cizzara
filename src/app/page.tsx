@@ -211,6 +211,7 @@ export default function CizzaraStudioPage() {
 
     <main className="w-full min-h-screen">
       <Visuals />
+
     </main>
   
 

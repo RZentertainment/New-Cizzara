@@ -1,52 +1,89 @@
-"use client"
 
-import { useScreenSize } from "./use-screen-size"
-import { PixelTrail } from "./pixel-trail"
-import { GooeyFilter } from "./gooey-filter"
+
+
+
+
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { PixelRevealCanvas } from "./PixelRevealCanvas";
 
 function GooeyDemo() {
-  const screenSize = useScreenSize()
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [pixelSize, setPixelSize] = useState(64);
+
+  // Responsive pixel size
+  useEffect(() => {
+    const update = () => {
+      setPixelSize(window.innerWidth < 768 ? 52 : 72);
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  // Ensure video plays (browsers may block autoplay)
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.play().catch(() => {
+      // Autoplay blocked — silently ignore; muted loop will still work on interaction
+    });
+  }, []);
 
   return (
-    <div className="relative w-full h-full min-h-[600px] flex flex-col items-center justify-center gap-8 bg-black text-center text-pretty overflow-hidden">
-      {/* Video background - autoplaying */}
+    <div className="relative w-full h-full min-h-[600px] flex flex-col items-center justify-center overflow-hidden bg-black">
+      {/* ── Video layer (z-0) ── */}
       <video
+        ref={videoRef}
         autoPlay
         loop
         muted
         playsInline
-        className="w-full h-full object-cover absolute inset-0 opacity-70 z-0"
+        className="absolute inset-0 w-full h-full object-cover"
+        style={{ zIndex: 0 }}
       >
-        <source 
-          src="https://cdn.cizzara.com/Cizzara-Latest/WhoWeAre.mp4" 
-          type="video/mp4" 
+        <source
+          src="https://cdn.cizzara.com/Cizzara-Latest/WhoWeAre.mp4"
+          type="video/mp4"
         />
-        Your browser does not support the video tag.
       </video>
 
-      {/* Gooey filter */}
-      <GooeyFilter id="gooey-filter-pixel-trail" strength={5} />
+      {/* ── Canvas pixel-reveal black overlay (z-10) ── */}
+      <PixelRevealCanvas pixelSize={pixelSize} trailLength={22} />
 
-      {/* Pixel trail overlay with gooey filter */}
+      {/* ── Text layer (z-20) — always fully visible ── */}
       <div
-        className="absolute inset-0 z-10"
-        style={{ filter: "url(#gooey-filter-pixel-trail)" }}
+        className="relative flex flex-col items-center justify-center gap-6 px-6 text-center"
+        style={{ zIndex: 20, pointerEvents: "none" }}
       >
-        <PixelTrail
-          pixelSize={screenSize.lessThan(`md`) ? 24 : 32}
-          fadeDuration={0}
-          delay={500}
-          pixelClassName="bg-white"
-        />
-      </div>
+        <p
+          className="
+            text-white
+            text-[clamp(2rem,6vw,5rem)]
+            font-bold
+            leading-[1.1]
+            tracking-tight
+            max-w-[720px]
+            select-none
+          "
+          style={{
+            textShadow: "0 2px 40px rgba(0,0,0,0.7), 0 0 80px rgba(0,0,0,0.4)",
+            fontFamily: "'Georgia', serif",
+          }}
+        >
+          Speaking things into existence
+        </p>
 
-      {/* Text overlay */}
-      <p className="text-white text-5xl md:text-7xl z-20 font-calendas w-full md:w-1/2 font-bold px-4">
-        Speaking things into existence
-        <span className="font-overusedGrotesk"></span>
-      </p>
+        <span
+          className="text-white/50 text-sm tracking-[0.25em] uppercase"
+          style={{ fontFamily: "system-ui, sans-serif" }}
+        >
+          Move your cursor to reveal
+        </span>
+      </div>
     </div>
-  )
+  );
 }
 
-export { GooeyDemo }
+export { GooeyDemo };
