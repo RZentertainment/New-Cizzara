@@ -1,65 +1,218 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useEffect, useState, useRef } from "react";
+import HomeLoading from "@/components/HomeLoading";
+import WhoWeAre from "@/components/Home/WhoWeAre";
+import ShowCase from "@/components/Home/ShowCase";
+import StudioOverview from "@/components/Home/StudioOverview";
+    import { Visuals } from "@/components/Visuals"
+
+export default function CizzaraStudioPage() {
+  const [isLoading, setIsLoading] = useState(true);
+  const [progress, setProgress] = useState(0);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  const fullText = "CizzaraStudio";
+  const totalLetters = fullText.length;
+
+  useEffect(() => {
+    const startTime = Date.now();
+    const duration = 2500;
+
+    const animateLetters = () => {
+      const elapsed = Date.now() - startTime;
+      const currentProgress = Math.min((elapsed / duration) * 100, 100);
+      const lettersCompleted = Math.floor((currentProgress / 100) * totalLetters);
+      setProgress(lettersCompleted);
+
+      if (currentProgress < 100) {
+        requestAnimationFrame(animateLetters);
+      } else {
+        setTimeout(() => {
+          setIsLoading(false);
+        }, 400);
+      }
+    };
+
+    requestAnimationFrame(animateLetters);
+  }, []);
+
+  // Go to specific page
+  const goToPage = (pageIndex: number, smooth = true) => {
+    if (isAnimating || !scrollContainerRef.current) return;
+    setIsAnimating(true);
+    
+    const pageWidth = window.innerWidth;
+    const targetScroll = pageIndex * pageWidth;
+    
+    scrollContainerRef.current.scrollTo({
+      left: targetScroll,
+      behavior: smooth ? 'smooth' : 'auto'
+    });
+    
+    setTimeout(() => {
+      setCurrentPage(pageIndex);
+      setDragOffset(0);
+      setIsAnimating(false);
+    }, 600);
+  };
+
+  // Handle drag start
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (isAnimating) return;
+    setIsDragging(true);
+    setStartX(e.clientX);
+    setDragOffset(0);
+  };
+
+  // Handle drag move
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || isAnimating || !scrollContainerRef.current) return;
+    
+    const deltaX = e.clientX - startX;
+    const maxDrag = window.innerWidth * 0.4; // Max 40% drag before flip
+    
+    // Clamp the drag offset
+    const clampedDrag = Math.max(-maxDrag, Math.min(maxDrag, deltaX));
+    setDragOffset(clampedDrag);
+    
+    // Apply transform for visual feedback
+    const currentScroll = currentPage * window.innerWidth;
+    scrollContainerRef.current.scrollLeft = currentScroll - clampedDrag;
+  };
+
+  // Handle drag end
+  const handleMouseUp = () => {
+    if (!isDragging || isAnimating) return;
+    setIsDragging(false);
+    
+    // Determine if we should flip
+    const threshold = window.innerWidth * 0.15; // 15% threshold
+    
+    if (dragOffset > threshold && currentPage > 0) {
+      // Flip to previous page
+      goToPage(currentPage - 1);
+    } else if (dragOffset < -threshold && currentPage < 2) {
+      // Flip to next page
+      goToPage(currentPage + 1);
+    } else {
+      // Snap back to current page
+      goToPage(currentPage);
+    }
+  };
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight' && currentPage < 2) {
+        goToPage(currentPage + 1);
+      } else if (e.key === 'ArrowLeft' && currentPage > 0) {
+        goToPage(currentPage - 1);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentPage, isAnimating]);
+
+  if (isLoading) {
+    return (
+      <HomeLoading 
+        progress={progress} 
+        totalLetters={totalLetters} 
+        fullText={fullText} 
+      />
+    );
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    // <div className="relative w-full h-screen overflow-hidden bg-[#0a0a0a]">
+    //   {/* Main Scroll Container */}
+    //   <div 
+    //     ref={scrollContainerRef}
+    //     className={`w-full h-full overflow-hidden ${
+    //       isDragging ? "cursor-grabbing" : "cursor-grab"
+    //     }`}
+    //     onMouseDown={handleMouseDown}
+    //     onMouseMove={handleMouseMove}
+    //     onMouseUp={handleMouseUp}
+    //     onMouseLeave={handleMouseUp}
+    //   >
+    //     <div className="flex flex-nowrap h-full">
+    //       {/* Page 1 - WhoWeAre */}
+    //       <div className="w-screen h-full flex-shrink-0">
+    //         <WhoWeAre />
+    //       </div>
+          
+    //       {/* Page 2 - ShowCase */}
+    //       <div className="w-screen h-full flex-shrink-0">
+    //         <ShowCase />
+    //       </div>
+          
+    //       {/* Page 3 - StudioOverview */}
+    //       <div className="w-screen h-full flex-shrink-0">
+    //         <StudioOverview />
+    //       </div>
+    //     </div>
+    //   </div>
+
+    //   {/* Page Indicator Numbers - Updated */}
+    //   <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex gap-2">
+    //     {[0, 1, 2].map((page) => (
+    //       <button
+    //         key={page}
+    //         onClick={() => goToPage(page)}
+    //         className={`w-10 h-10 flex items-center justify-center text-sm font-medium transition-all duration-300 ${
+    //           currentPage === page 
+    //             ? "bg-black text-white" 
+    //             : "bg-black/50 text-white/50 hover:bg-black/70 hover:text-white/80"
+    //         }`}
+    //       >
+    //         {page + 1}
+    //       </button>
+    //     ))}
+    //   </div>
+
+    //   {/* Navigation Arrows */}
+    //   <button
+    //     onClick={() => goToPage(currentPage - 1)}
+    //     className={`fixed left-6 top-1/2 -translate-y-1/2 z-50 p-3 rounded-full bg-white/5 backdrop-blur-sm text-white/70 transition-all duration-300 hover:bg-white/20 hover:text-white ${
+    //       currentPage === 0 ? "opacity-0 pointer-events-none" : "opacity-100"
+    //     }`}
+    //   >
+    //     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    //       <polyline points="15 18 9 12 15 6" />
+    //     </svg>
+    //   </button>
+
+    //   <button
+    //     onClick={() => goToPage(currentPage + 1)}
+    //     className={`fixed right-6 top-1/2 -translate-y-1/2 z-50 p-3 rounded-full bg-white/5 backdrop-blur-sm text-white/70 transition-all duration-300 hover:bg-white/20 hover:text-white ${
+    //       currentPage === 2 ? "opacity-0 pointer-events-none" : "opacity-100"
+    //     }`}
+    //   >
+    //     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    //       <polyline points="9 18 15 12 9 6" />
+    //     </svg>
+    //   </button>
+
+    //   {/* Page Number */}
+    //   <div className="fixed bottom-8 right-8 z-50 text-white/30 text-xs tracking-widest font-light">
+    //     {String(currentPage + 1).padStart(2, '0')} / 03
+    //   </div>
+    // </div>
+
+
+
+    <main className="w-full min-h-screen">
+      <Visuals />
+    </main>
+  
+
   );
 }
