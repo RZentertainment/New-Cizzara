@@ -57,3 +57,21 @@ html, body {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.1);
 }
+
+
+
+  @keyframes sway {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-20px);
+  }
+  75% {
+    transform: translateX(20px);
+  }
+}
+
+.animate-sway {
+  animation: sway 4s ease-in-out infinite;
+}

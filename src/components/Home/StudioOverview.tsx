@@ -1,105 +1,287 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import gsap from "gsap";
 import { ScrollToPlugin } from "gsap/ScrollToPlugin";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 
-// Register GSAP plugins
 gsap.registerPlugin(ScrollToPlugin, ScrollTrigger);
 
-export default function StudioOverview() {
+type View = "VIEW_OVERVIEW" | "VIEW_VIDEO";
+
+export default function StudioOverview({ active = false }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const sectionRef = useRef<HTMLDivElement>(null);
   const overviewRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
   const [isVideoVisible, setIsVideoVisible] = useState(false);
-  const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [hasAnimated, setHasAnimated] = useState(false);
+  const [isReady, setIsReady] = useState(false);
 
-  // Handle scroll to video (scroll UP to video section)
-  const handleExploreClick = () => {
-    if (isTransitioning) return;
-    setIsTransitioning(true);
-    
-    // First show the video section
-    setIsVideoLoaded(true);
-    
-    // Small delay to ensure DOM is updated
-    setTimeout(() => {
-      setIsVideoVisible(true);
-      
-      // Then smoothly scroll to it
-      if (containerRef.current) {
-        gsap.to(containerRef.current, {
-          duration: 1.8,
-          scrollTo: {
-            y: 0,
-          },
-          ease: "power3.inOut",
-          onComplete: () => {
-            setIsTransitioning(false);
-          }
-        });
-      }
-    }, 50);
-  };
+  // Refs mirror state so GSAP callbacks / rAF loops / event listeners
+  // never read stale values.
+  const isTransitioningRef = useRef(false);
+  const isReadyRef = useRef(false);
+  const isVideoVisibleRef = useRef(false);
+  const tlRef = useRef<gsap.core.Timeline | null>(null);
 
-  // Handle close - scroll back to overview (scroll DOWN)
-  const handleClose = () => {
-    if (isTransitioning) return;
-    setIsTransitioning(true);
-    
-    setIsVideoVisible(false);
-    
-    if (containerRef.current) {
-      gsap.to(containerRef.current, {
-        duration: 1.5,
-        scrollTo: {
-          y: window.innerHeight,
-        },
-        ease: "power3.inOut",
-        onComplete: () => {
-          setIsVideoLoaded(false);
-          setIsTransitioning(false);
-        }
-      });
-    }
-  };
+  // Single source of truth for the current panel.
+  const viewRef = useRef<View>("VIEW_OVERVIEW");
 
-  // Handle video autoplay when visible
+  useEffect(() => { isTransitioningRef.current = isTransitioning; }, [isTransitioning]);
+  useEffect(() => { isReadyRef.current = isReady; }, [isReady]);
+  useEffect(() => { isVideoVisibleRef.current = isVideoVisible; }, [isVideoVisible]);
+
+  const targetYFor = (view: View) => (view === "VIEW_OVERVIEW" ? window.innerHeight : 0);
+
+  /* ── Video autoplay/pause follows visibility ─────────────────────── */
   useEffect(() => {
-    if (isVideoVisible && videoRef.current) {
+    if (isVideoVisible) {
       videoRef.current?.play().catch(() => {});
-    } else if (videoRef.current) {
+    } else {
       videoRef.current?.pause();
     }
   }, [isVideoVisible]);
 
-  // Auto-scroll to overview on load
+  /* ── Deterministic initialization (no setTimeout) ─────────────────
+     Video panel is always mounted (opacity-toggled, not display-
+     toggled — see render below), so the container is reliably 2
+     viewports tall once painted. Wait for that, plus two rAFs for
+     paint confirmation, before snapping scroll and flipping isReady. */
   useEffect(() => {
-    if (containerRef.current) {
-      setTimeout(() => {
-        containerRef.current?.scrollTo({ top: window.innerHeight, behavior: "instant" });
-      }, 50);
-    }
+    let cancelled = false;
+    let raf1 = 0;
+    let raf2 = 0;
+
+    const tryInit = () => {
+      if (cancelled) return;
+      const el = containerRef.current;
+
+      if (!el || el.scrollHeight < window.innerHeight * 2) {
+        raf1 = requestAnimationFrame(tryInit);
+        return;
+      }
+
+      raf2 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => {
+          if (cancelled || !containerRef.current) return;
+          viewRef.current = "VIEW_OVERVIEW";
+          containerRef.current.scrollTo({ top: window.innerHeight, behavior: "instant" });
+          setIsReady(true);
+          isReadyRef.current = true;
+        });
+      });
+    };
+
+    tryInit();
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
   }, []);
 
+  /* ── Lock out every native scroll vector ──────────────────────────
+     Wheel, touch, and keyboard scrolling are all preventDefault'd.
+     GSAP drives scrollTop directly, so none of this interrupts a
+     running timeline. ───────────────────────────────────────────────── */
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const blockWheel = (e: WheelEvent) => {
+      e.preventDefault();
+    };
+
+    const blockTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+    };
+
+    const SCROLL_KEYS = new Set([
+      "ArrowUp",
+      "ArrowDown",
+      " ",
+      "Spacebar",
+      "PageUp",
+      "PageDown",
+      "Home",
+      "End",
+    ]);
+
+    const blockKeys = (e: KeyboardEvent) => {
+      if (SCROLL_KEYS.has(e.key)) {
+        e.preventDefault();
+      }
+    };
+
+    el.addEventListener("wheel", blockWheel, { passive: false });
+    el.addEventListener("touchmove", blockTouchMove, { passive: false });
+    document.addEventListener("keydown", blockKeys, { passive: false });
+
+    return () => {
+      el.removeEventListener("wheel", blockWheel);
+      el.removeEventListener("touchmove", blockTouchMove);
+      document.removeEventListener("keydown", blockKeys);
+    };
+  }, []);
+
+  /* ── Drift correction ──────────────────────────────────────────────
+     Snap scrollTop back to the current view's resting position if it
+     ever drifts (resize, stray external scroll) — never while a GSAP
+     timeline is actively driving the scroll. ─────────────────────────── */
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || !isReady) return;
+
+    const correctDrift = () => {
+      if (isTransitioningRef.current || !containerRef.current) return;
+      const expected = targetYFor(viewRef.current);
+      if (Math.abs(containerRef.current.scrollTop - expected) > 1) {
+        containerRef.current.scrollTo({ top: expected, behavior: "instant" });
+      }
+    };
+
+    const onResize = () => correctDrift();
+    const onScroll = () => correctDrift();
+
+    window.addEventListener("resize", onResize);
+    el.addEventListener("scroll", onScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener("resize", onResize);
+      el.removeEventListener("scroll", onScroll);
+    };
+  }, [isReady]);
+
+  useEffect(() => {
+    return () => {
+      tlRef.current?.kill();
+    };
+  }, []);
+
+  /* ── Explore Studio: Overview → Video. One master timeline; the
+     video panel mounts (opacity-toggled) immediately before the slide
+     so it never flashes in ahead of the GSAP scroll. ────────────────── */
+  const handleExploreClick = useCallback(() => {
+    if (!isReadyRef.current || isTransitioningRef.current || isVideoVisibleRef.current) return;
+    const el = containerRef.current;
+    if (!el) return;
+
+    isTransitioningRef.current = true;
+    setIsTransitioning(true);
+
+    tlRef.current?.kill();
+
+    const tl = gsap.timeline({
+      onComplete: () => {
+        viewRef.current = "VIEW_VIDEO";
+        isTransitioningRef.current = false;
+        setIsTransitioning(false);
+      },
+    });
+
+    tl.call(() => {
+      setIsVideoVisible(true);
+      isVideoVisibleRef.current = true;
+    }).to(el, {
+      duration: 1.8,
+      scrollTo: { y: 0 },
+      ease: "power3.inOut",
+    });
+
+    tlRef.current = tl;
+  }, []);
+
+  /* ── Close: Video → Overview, unmount only after ──────────────────── */
+  const handleClose = useCallback(() => {
+    if (!isReadyRef.current || isTransitioningRef.current || !isVideoVisibleRef.current) return;
+    const el = containerRef.current;
+    if (!el) return;
+
+    isTransitioningRef.current = true;
+    setIsTransitioning(true);
+
+    tlRef.current?.kill();
+
+    const tl = gsap.timeline({
+      onComplete: () => {
+        viewRef.current = "VIEW_OVERVIEW";
+        setIsVideoVisible(false);
+        isVideoVisibleRef.current = false;
+        isTransitioningRef.current = false;
+        setIsTransitioning(false);
+      },
+    });
+
+    tl.to(el, {
+      duration: 1.5,
+      scrollTo: { y: window.innerHeight },
+      ease: "power3.inOut",
+    });
+
+    tlRef.current = tl;
+  }, []);
+
+  /* ── Set initial hidden state for the text/button reveal ──────────── */
+  useEffect(() => {
+    gsap.set(textRef.current, { x: -100, opacity: 0 });
+    gsap.set(buttonRef.current, { x: -100, opacity: 0 });
+  }, []);
+
+  /* ── Animate text/button in when this page becomes active ─────────── */
+  useEffect(() => {
+    if (active && !hasAnimated) {
+      const tl = gsap.timeline({
+        onComplete: () => {
+          setHasAnimated(true);
+        },
+      });
+
+      tl.to(textRef.current, {
+        x: 0,
+        opacity: 1,
+        duration: 1,
+        ease: "power3.out",
+      }).to(
+        buttonRef.current,
+        {
+          x: 0,
+          opacity: 1,
+          duration: 0.8,
+          ease: "power3.out",
+        },
+        "-=0.3"
+      );
+    } else if (!active && hasAnimated) {
+      gsap.set(textRef.current, { x: -100, opacity: 0 });
+      gsap.set(buttonRef.current, { x: -100, opacity: 0 });
+      setHasAnimated(false);
+    }
+  }, [active, hasAnimated]);
+
   return (
-    <div 
+    <div
       ref={containerRef}
-      className="w-full h-screen overflow-y-auto overflow-x-hidden"
-      style={{ scrollSnapType: 'y mandatory' }}
+      className="w-full h-screen overflow-hidden overscroll-none"
+      // scrollSnapType removed — vertical position is now exclusively
+      // programmatic (View type above), driven only by button clicks.
+      style={{ overflowY: "hidden", overflowX: "hidden" }}
     >
-      {/* Video Section - Hidden by default, appears on click */}
+      {/* Video Section — always mounted, opacity-toggled (never display)
+          so the container's scrollable height is constant. */}
       <section
         id="studio-video"
         ref={sectionRef}
-        className={`relative h-screen w-full flex-shrink-0 overflow-hidden bg-black group transition-all duration-700 ${
-          isVideoLoaded ? "block" : "hidden"
-        } ${isVideoVisible ? "cursor-close" : ""}`}
+        className={`relative h-screen w-full flex-shrink-0 overflow-hidden bg-black group transition-opacity duration-300 ${
+          isVideoVisible ? "opacity-100 pointer-events-auto cursor-close" : "opacity-0 pointer-events-none"
+        }`}
         onClick={handleClose}
-        style={{ scrollSnapAlign: 'start' }}
+        aria-hidden={!isVideoVisible}
       >
         <video
           ref={videoRef}
@@ -115,18 +297,15 @@ export default function StudioOverview() {
           />
         </video>
 
-        {/* Overlay */}
         <div className="absolute inset-0 bg-black/20 pointer-events-none" />
 
-        {/* Content */}
         <div className="relative z-10 flex h-full items-center justify-center pointer-events-none">
           <h2 className="text-white text-5xl md:text-7xl font-light tracking-[0.3em] uppercase">
             Studio
           </h2>
         </div>
 
-        {/* Hint text - "Click anywhere to close" */}
-        <div 
+        <div
           className={`absolute bottom-8 left-0 right-0 z-20 text-center transition-all duration-500 pointer-events-none ${
             isVideoVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
           }`}
@@ -138,13 +317,11 @@ export default function StudioOverview() {
       </section>
 
       {/* Studio Overview Section - Always visible */}
-      <section 
+      <section
         id="studio-overview"
         ref={overviewRef}
         className="relative h-screen w-full flex-shrink-0 overflow-hidden"
-        style={{ scrollSnapAlign: 'start' }}
       >
-        {/* Background */}
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{
@@ -153,42 +330,37 @@ export default function StudioOverview() {
           }}
         />
 
-        {/* Overlay */}
         <div className="absolute inset-0 bg-black/10" />
 
         <div className="relative z-10 flex h-full items-center">
           <div className="ml-[8vw] max-w-[520px] text-white">
-            {/* Small Label */}
-            <p className="mb-8 ml-2 text-xs uppercase tracking-[0.25em] font-medium">
-              STUDIO OVERVIEW
-            </p>
+            <div ref={textRef}>
+              <p className="mb-8 ml-2 text-xs uppercase tracking-[0.25em] font-medium">
+                STUDIO OVERVIEW
+              </p>
 
-            {/* Heading */}
-            <h2 className="text-5xl md:text-6xl lg:text-7xl font-semibold leading-[0.95] tracking-[-0.03em]">
-              Creating stories
-              <br />
-              that become
-              <br />
-              experiences.
-            </h2>
+              <h2 className="text-5xl md:text-6xl lg:text-7xl font-semibold leading-[0.95] tracking-[-0.03em]">
+                Creating stories
+                <br />
+                that become
+                <br />
+                experiences.
+              </h2>
 
-            {/* Divider */}
-            <div className="mt-10 mb-10 h-px w-full max-w-[420px] bg-white/70" />
+              <div className="mt-10 mb-10 h-px w-full max-w-[420px] bg-white/70" />
+            </div>
 
-            {/* Explore Button */}
             <button
+              ref={buttonRef}
               onClick={handleExploreClick}
               className="group relative inline-block w-80 h-20 cursor-pointer"
             >
-              {/* Expanding Circle */}
               <span className="absolute left-0 top-0 flex h-20 w-20 items-center rounded-full bg-white transition-all duration-700 ease-[cubic-bezier(0.65,0,0.076,1)] group-hover:w-full">
-                {/* Arrow */}
                 <span className="absolute left-6 h-[3px] w-7 bg-black">
                   <span className="absolute right-0 top-[-6px] h-4 w-4 rotate-45 border-r-[3px] border-t-[3px] border-black" />
                 </span>
               </span>
 
-              {/* Text */}
               <span className="absolute inset-0 ml-16 flex items-center justify-center text-lg font-semibold uppercase tracking-[0.2em] text-white transition-colors duration-700 group-hover:text-black">
                 Explore Studio
               </span>
@@ -197,10 +369,9 @@ export default function StudioOverview() {
         </div>
       </section>
 
-      {/* Add custom cursor style for close */}
       <style jsx global>{`
         .cursor-close {
-          cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 56 56'%3E%3Cdefs%3E%3ClinearGradient id='gold' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%23f5e6b8;stop-opacity:1' /%3E%3Cstop offset='50%25' style='stop-color:%23fcf3da;stop-opacity:1' /%3E%3Cstop offset='100%25' style='stop-color:%23e8d5a3;stop-opacity:1' /%3E%3C/linearGradient%3E%3Cfilter id='shadow' x='-20%25' y='-20%25' width='140%25' height='140%25'%3E%3CfeDropShadow dx='0' dy='3' stdDeviation='8' flood-color='black' flood-opacity='0.4'/%3E%3C/filter%3E%3C/defs%3E%3Ccircle cx='28' cy='28' r='26' fill='url(%23gold)' stroke='%23b8943a' stroke-width='1.5' filter='url(%23shadow)'/%3E%3Ccircle cx='28' cy='28' r='22' fill='none' stroke='%23b8943a' stroke-width='0.5' opacity='0.4'/%3E%3Cg transform='translate(28,28)'%3E%3Cline x1='-10' y1='-10' x2='10' y2='10' stroke='%23222222' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='10' y1='-10' x2='-10' y2='10' stroke='%23222222' stroke-width='2.5' stroke-linecap='round'/%3E%3C/g%3E%3C/svg%3E") 28 28, pointer !important;
+          cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 56 56'%3E%3Cg transform='translate(28,28)'%3E%3Cline x1='-12' y1='-12' x2='12' y2='12' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3Cline x1='12' y1='-12' x2='-12' y2='12' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/g%3E%3C/svg%3E") 28 28, pointer !important;
         }
       `}</style>
     </div>

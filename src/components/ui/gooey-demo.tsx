@@ -77,32 +77,100 @@ function GooeyDemo() {
         />
       )}
 
-      <div
-        className="relative flex flex-col items-center justify-center gap-5 px-6 text-center select-none"
-        style={{ zIndex: 20, pointerEvents: "none" }}
-      >
-        <p
-          className="text-white font-bold leading-[1.1] tracking-tight max-w-[720px]"
-          style={{
-            fontSize: "clamp(2rem, 6vw, 5rem)",
-            textShadow:
-              "0 2px 40px rgba(0,0,0,0.8), 0 0 80px rgba(0,0,0,0.5)",
-            fontFamily: "'Georgia', serif",
-          }}
-        >
-          Speaking things into existence
-        </p>
+ <div
+  className="relative flex flex-col items-center justify-center select-none"
+  style={{
+    zIndex: 20,
+    pointerEvents: "none",
+    fontFamily: "'Georgia', serif",
+  }}
+>
+  {/* WE TRY TO */}
+  <div className="absolute left-[-140px] top-0">
+    <div className="border-t border-b border-white/40 py-1 px-2 inline-block">
+      <span className="text-white text-[10px] md:text-xs tracking-[0.25em] uppercase leading-tight">
+        WE TRY
+        <br />
+        TO
+      </span>
+    </div>  
+  </div>
 
-        <span
-          className="text-sm tracking-[0.22em] uppercase transition-opacity duration-700"
-          style={{
-            fontFamily: "system-ui, sans-serif",
-            color: isCompleted ? "transparent" : "rgba(255,255,255,0.45)",
-            opacity: isCompleted ? 0 : 1,
-          }}
-        >
-          {hintText ?? ""}
-        </span>
+        {/* Grid text layout */}
+        <div className="flex flex-col items-left mt-20 gap-2 md:gap-8">
+          {/* Row 1: M A K E */}
+          <div className="flex gap-4 md:gap-6 lg:gap-8">
+            {['M', 'A', 'K', 'E'].map((char, index) => (
+              <span 
+                key={`row1-${index}`}
+                className="text-white text-3xl md:text-5xl lg:text-5xl tracking-[0.2em] md:tracking-[0.3em] lg:tracking-[0.4em] font-light"
+              >
+                {char}
+              </span>
+            ))}
+          </div>
+
+          {/* Row 2: T H E - W E B */}
+          <div className="flex gap-4 md:gap-6 lg:gap-8">
+            {['T', 'H', 'E'].map((char, index) => (
+              <span 
+                key={`row2a-${index}`}
+                className="text-white text-3xl md:text-5xl lg:text-5xl tracking-[0.2em] md:tracking-[0.3em] lg:tracking-[0.4em] font-light"
+              >
+                {char}
+              </span>
+            ))}
+            <span className="text-white text-3xl md:text-5xl lg:text-5xl font-light">-</span>
+            {['W', 'E', 'B'].map((char, index) => (
+              <span 
+                key={`row2b-${index}`}
+                className="text-white text-3xl md:text-5xl lg:text-5xl tracking-[0.2em] md:tracking-[0.3em] lg:tracking-[0.4em] font-light"
+              >
+                {char}
+              </span>
+            ))}
+          </div>
+
+          {/* Row 3: A - B E T T E R */}
+          <div className="flex gap-4 md:gap-6 lg:gap-8">
+            <span className="text-white text-3xl md:text-5xl lg:text-5xl tracking-[0.2em] md:tracking-[0.3em] lg:tracking-[0.4em] font-light">A</span>
+            <span className="text-white text-3xl md:text-5xl lg:text-5xl font-light">-</span>
+            {['B', 'E', 'T', 'T', 'E', 'R'].map((char, index) => (
+              <span 
+                key={`row3-${index}`}
+                className="text-white text-3xl md:text-5xl lg:text-5xl tracking-[0.2em] md:tracking-[0.3em] lg:tracking-[0.4em] font-light"
+              >
+                {char}
+              </span>
+            ))}
+          </div>
+
+          {/* Row 4: P L A C E */}
+          <div className="flex gap-4 md:gap-6 lg:gap-8">
+            {['P', 'L', 'A', 'C', 'E'].map((char, index) => (
+              <span 
+                key={`row4-${index}`}
+                className="text-white text-3xl md:text-5xl lg:text-5xl tracking-[0.2em] md:tracking-[0.3em] lg:tracking-[0.4em] font-light"
+              >
+                {char}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Hint text */}
+        <div className="mt-12 md:mt-16">
+          <span
+            className="text-sm tracking-[0.22em] uppercase transition-opacity duration-700"
+            style={{
+              fontFamily: "system-ui, sans-serif",
+              color: isCompleted ? "transparent" : "rgba(255,255,255,0.45)",
+              opacity: isCompleted ? 0 : 1,
+            }}
+          >
+            {hintText ?? ""}
+          </span>
+        </div>
       </div>
     </div>
   );

@@ -5,11 +5,14 @@ import HomeLoading from "@/components/HomeLoading";
 import WhoWeAre from "@/components/Home/WhoWeAre";
 import ShowCase from "@/components/Home/ShowCase";
 import StudioOverview from "@/components/Home/StudioOverview";
-import About from "@/components/Home/About"; // Added About component
+import About from "@/components/Home/About/About";
 import { Visuals } from "@/components/Visuals";
-import Service from "@/components/Home/Service";
-import Reviews from "@/components/Home/Reviews";
 import ShowReel from "@/components/Home/ShowReel";
+import Focuse from "@/components/Home/Focuse";
+import Blog from "@/components/Home/Blog";
+import Clients from "@/components/Home/Clients";
+import Service from "@/components/Home/Service/Service";
+import Reviews from "@/components/Home/Reviews/Reviews";
 
 export default function CizzaraStudioPage() {
   const [isLoading, setIsLoading] = useState(true);
@@ -35,7 +38,7 @@ export default function CizzaraStudioPage() {
     isAnimatingRef.current = isAnimating;
   }, [isAnimating]);
 
-  const totalPages = 8; // Updated to 5 pages (0, 1, 2, 3, 4)
+  const totalPages = 11; // Updated to 5 pages (0, 1, 2, 3, 4)
   const fullText = "CizzaraStudio";
   const totalLetters = fullText.length;
 
@@ -203,6 +206,7 @@ export default function CizzaraStudioPage() {
       />
     );
   }
+  
 
   return (
     <main className="w-full min-h-screen">
@@ -230,18 +234,19 @@ export default function CizzaraStudioPage() {
             <ShowCase />
           </div>
           
-          <div className="w-screen h-full flex-shrink-0">
-            <StudioOverview />
-          </div>
- 
+<div className="w-screen h-full flex-shrink-0">
+  <StudioOverview active={currentPage === 2} /> 
+</div>
+ <div className="w-screen h-full flex-shrink-0">
+  <Visuals active={currentPage === 3} />
+</div>
           <div className="w-screen h-full flex-shrink-0">
             <About />
           </div>
+
+
 <div className="w-screen h-full flex-shrink-0">
-  <Visuals active={currentPage === 4} />
-</div>
-<div className="w-screen h-full flex-shrink-0">
-  <Service active={currentPage === 5} /> {/* Update page index as needed */}
+  <Service active={currentPage === 5} /> 
 </div>
              <div className="w-screen h-full flex-shrink-0">
             <Reviews />
@@ -249,7 +254,17 @@ export default function CizzaraStudioPage() {
             <div className="w-screen h-full flex-shrink-0">
             <ShowReel />
           </div>
-         
+          <div className="w-screen h-full flex-shrink-0">
+            <Focuse />
+          </div>
+
+  <div className="w-screen h-full flex-shrink-0">
+          <Blog/>
+          </div>
+
+            <div className="w-screen h-full flex-shrink-0">
+          <Clients/>
+          </div>
          
         </div>
       </div>

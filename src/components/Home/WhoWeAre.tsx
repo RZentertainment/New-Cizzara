@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const items = [
   {
@@ -21,12 +21,27 @@ const items = [
 ];
 
 export default function WhoWeAre() {
-  // Fix: Explicitly type the state as number | null
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
-  // Fix: Add type annotation for the parameter 'i'
-  const handleClick = (i: number) => {
+  // Handle click outside to close the active subtitle
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (activeIndex !== null) {
+        setActiveIndex(null);
+        setHoveredIndex(null);
+      }
+    };
+
+    document.addEventListener("click", handleClickOutside);
+    return () => {
+      document.removeEventListener("click", handleClickOutside);
+    };
+  }, [activeIndex]);
+
+  // Handle click on individual items
+  const handleClick = (i: number, event: React.MouseEvent) => {
+    event.stopPropagation();
     setActiveIndex((prev) => (prev === i ? null : i));
   };
 
@@ -62,7 +77,7 @@ export default function WhoWeAre() {
                 className="relative w-full flex flex-col items-center justify-center cursor-pointer select-none"
                 onMouseEnter={() => setHoveredIndex(i)}
                 onMouseLeave={() => setHoveredIndex(null)}
-                onClick={() => handleClick(i)}
+                onClick={(e) => handleClick(i, e)}
               >
                 {/* Expanding black bar on hover */}
                 <div
@@ -77,16 +92,19 @@ export default function WhoWeAre() {
                 />
 
                 {/* Word */}
-                <h2
-                  className={`relative text-2xl md:text-3xl lg:text-4xl font-light tracking-[0.3em] md:tracking-[0.4em] uppercase z-10 transition-all duration-500 ease-in-out ${
-                    isHovered || isActive
-                      ? "text-white scale-105"
-                      : "text-white/90 scale-100"
-                  }`}
-                  style={{ paddingTop: isActive ? "1.5rem" : "0.5rem", paddingBottom: "0.5rem" }}
-                >
-                  {item.label}
-                </h2>
+             <h2
+  className={`relative z-10 text-2xl py-2 md:text-3xl lg:text-4xl
+    font-light tracking-[0.4em] uppercase
+    transition-all duration-500 ease-in-out
+    ${
+      isHovered || isActive
+        ? "text-white scale-105"
+        : "text-white/90 scale-100"
+    }
+  `}
+>
+  {item.label}
+</h2>
 
                 {/* Expandable description */}
                 <div
@@ -101,32 +119,94 @@ export default function WhoWeAre() {
                   </p>
                 </div>
 
-                {/* Dotted divider — gap increases on hover/active */}
+                {/* Dotted divider — maintains consistent gap */}
                 {i < items.length - 1 && (
-                  <div
-                    className={`relative w-full transition-all duration-500 ease-in-out ${
-                      isHovered || isActive ? "mt-6" : "mt-1"
-                    }`}
-                  >
-                    <div className="w-full border-t border-dotted border-white/30" />
-                  </div>
-                )}
+  <div className="absolute bottom-0 left-0 w-full">
+    <div className="w-full border-t border-dotted border-white/30" />
+  </div>
+)}
               </div>
             );
           })}
         </div>
 
-        {/* Bottom label */}
-        <div className="absolute bottom-16 left-1/2 -translate-x-1/2">
-          <div className="flex flex-col items-center gap-2">
-            <div className="w-8 h-[1px] bg-white/50" />
-            <span className="text-[10px] md:text-xs tracking-[0.2em] text-white/70 uppercase">
-              What is Cizzara Studio?
-            </span>
-            <div className="w-8 h-[1px] bg-white/50" />
+<div className="absolute bottom-36 left-1/2 -translate-x-1/2">
+  <div className="flex flex-col items-center gap-4">
+    {/* Indicator */}
+    <div className="relative py-4">
+      {/* Top line */}
+      <div className="absolute -top-0 left-1/2 -translate-x-1/2 w-[115%] h-px bg-white/30" />
+
+      {/* Boxes */}
+      <div className="flex items-center gap-[2px] animate-sway">
+        {/* Left box */}
+        <div className="w-16 h-9 border border-white/30" />
+
+        {/* Center box */}
+        <div className="relative w-16 h-9 border border-white flex items-center justify-center">
+          {/* Left arrow */}
+          <div className="absolute -left-5 text-white/60">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            >
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+          </div>
+
+          {/* Hand icon */}
+          <div className="text-white">
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M9 11V5a1.5 1.5 0 1 1 3 0v6" />
+              <path d="M12 11V4a1.5 1.5 0 1 1 3 0v7" />
+              <path d="M15 11V6a1.5 1.5 0 1 1 3 0v5" />
+              <path d="M18 11V9a1.5 1.5 0 1 1 3 0v6c0 3.314-2.686 6-6 6h-4c-2.761 0-5-2.239-5-5v-5a1.5 1.5 0 1 1 3 0v3" />
+            </svg>
+          </div>
+
+          {/* Right arrow */}
+          <div className="absolute -right-5 text-white/60">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            >
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
           </div>
         </div>
+
+        {/* Right box */}
+        <div className="w-16 h-9 border border-white/30" />
+      </div>
+
+      {/* Bottom line */}
+      <div className="absolute -bottom-0 left-1/2 -translate-x-1/2 w-[115%] h-px bg-white/30" />
+    </div>
+
+    {/* Text */}
+    <span className="text-[10px] md:text-[11px] tracking-[0.25em] text-white/50 uppercase font-medium">
+      DRAG TO BROWSE
+    </span>
+  </div>
+</div>
       </div>
     </section>
   );
-}
+} 
