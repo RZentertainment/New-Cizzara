@@ -17,7 +17,6 @@ const GoogleIcon = () => (
   </svg>
 );
 
-// Review Data from your MongoDB
 const reviewsData = [
   {
     _id: "6a06fb35c74f851db813e760",

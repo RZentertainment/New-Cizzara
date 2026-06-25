@@ -31,7 +31,6 @@ const LOGOS: string[] = [
   "https://cdn.cizzara.com/clients/3dff300d-d49f-4b57-8d4d-ef6dfddcc48b.webp",
 ];
 
-// De-duplicated source list — guarantees no logo is ever placed twice.
 const UNIQUE_LOGOS: string[] = Array.from(new Set(LOGOS));
 
 interface Cell {
@@ -40,7 +39,7 @@ interface Cell {
   x: number;
   y: number;
   isCenter: boolean;
-  ring: number; // discrete distance bucket from center, used for stagger order
+  ring: number; 
   logoIndex: number | null;
 }
 
@@ -86,13 +85,7 @@ const Clients: React.FC = () => {
     };
   }, []);
 
-  // ---------- Build a true interlocking diamond lattice ----------
-  // A diamond made by clip-path on a plain square grid only touches its
-  // neighbors tip-to-tip — that leaves a diamond-shaped hole at every
-  // 4-way junction (the "checkerboard of gaps" in the screenshot).
-  // A real diamond/rhombus tessellation offsets every other row by half a
-  // cell and halves the row pitch, so each diamond nests directly between
-  // the two below it with zero negative space. That's what this builds.
+
   const buildGrid = useCallback(() => {
     const section = sectionRef.current;
     if (!section) return;

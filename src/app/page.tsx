@@ -248,9 +248,9 @@ export default function CizzaraStudioPage() {
 <div className="w-screen h-full flex-shrink-0">
   <Service active={currentPage === 5} /> 
 </div>
-             <div className="w-screen h-full flex-shrink-0">
-            <Reviews />
-          </div>
+           <div className="w-screen h-full flex-shrink-0">
+  <Reviews active={currentPage === 6} /> 
+</div>
             <div className="w-screen h-full flex-shrink-0">
             <ShowReel />
           </div>
