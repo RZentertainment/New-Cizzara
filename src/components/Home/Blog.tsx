@@ -7,7 +7,6 @@ interface BlogPost {
   description: string;
   imageUrls: string[];
 }
-
 const defaultPosts: BlogPost[] = [
   {
     _id: "post-1",
@@ -32,6 +31,18 @@ const defaultPosts: BlogPost[] = [
     name: "Digital Media Growth",
     description: "New Growth Engine",
     imageUrls: ["https://cdn.rzentertainment.group/blogs/1b8c2629-f028-42a9-a089-693ad8cd21ab.webp"],
+  },
+  {
+    _id: "post-5",
+    name: "Visual Identity Design",
+    description: "Powerful Brand Building",
+    imageUrls: ["https://cdn.cizzara.com/blogs/2263b0f3-f8b2-45bd-9912-4b264543b8ff.webp"],
+  },
+  {
+    _id: "post-6",
+    name: "Future of Entertainment",
+    description: "Creativity Meets Tech",
+    imageUrls: ["https://cdn.rzentertainment.group/blogs/37f3b1b1-db05-42c0-9679-bcc27cb56b2c.webp"],
   },
 ];
 
@@ -100,16 +111,20 @@ const Blog: React.FC = () => {
 
     // Center 2×2 block hosts the 4 real posts — every other cell is a
     // placeholder diamond, but built from the exact same geometry.
-    const rowMid = Math.round(vh / 2 / rowPitch);
-    const colMid = Math.round(vw / 2 / S);
+// Center 2x3 block hosts the 6 real posts
+const rowMid = Math.round(vh / 2 / rowPitch);
+const colMid = Math.round(vw / 2 / S);
 
-    const postSlots: Record<string, BlogPost> = {
-      [`${rowMid}-${colMid}`]: defaultPosts[0],
-      [`${rowMid}-${colMid + 1}`]: defaultPosts[1],
-      [`${rowMid + 1}-${colMid}`]: defaultPosts[2],
-      [`${rowMid + 1}-${colMid + 1}`]: defaultPosts[3],
-    };
-
+const postSlots: Record<string, BlogPost> = {
+  // Top row (3 posts)
+  [`${rowMid - 1}-${colMid - 1}`]: defaultPosts[0],
+  [`${rowMid - 1}-${colMid}`]: defaultPosts[1],
+  [`${rowMid - 1}-${colMid + 1}`]: defaultPosts[2],
+  // Bottom row (3 posts)
+  [`${rowMid}-${colMid - 1}`]: defaultPosts[3],
+  [`${rowMid}-${colMid}`]: defaultPosts[4],
+  [`${rowMid}-${colMid + 1}`]: defaultPosts[5],
+};
     for (let row = rowMin; row <= rowMax; row++) {
       const xOffset = row % 2 !== 0 ? S / 2 : 0;
       for (let col = colMin; col <= colMax; col++) {

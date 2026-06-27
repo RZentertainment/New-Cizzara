@@ -9,9 +9,7 @@ interface ServiceVideoProps {
 
 const ServiceVideo = ({ isVisible, videoRef, onClose }: ServiceVideoProps) => {
   return (
-    // Always present in layout (never display:none) so the container's
-    // scrollable height is constant and predictable — only opacity/pointer
-    // events toggle, which never shifts anything below it.
+ 
     <section
       className={`relative h-screen w-full flex-shrink-0 overflow-hidden bg-black transition-opacity duration-300 ${
         isVisible ? "opacity-100 pointer-events-auto cursor-close" : "opacity-0 pointer-events-none"
@@ -29,7 +27,7 @@ const ServiceVideo = ({ isVisible, videoRef, onClose }: ServiceVideoProps) => {
         className="absolute inset-0 w-full h-full object-cover pointer-events-none"
       >
         <source
-          src="https://cdn.cizzara.com/Cizzara-Latest/WhoWeAre.mp4"
+          src="https://cdn.cizzara.com/Cizzara-Latest/WhoWeAreVid1.mp4"
           type="video/mp4"
         />
       </video>

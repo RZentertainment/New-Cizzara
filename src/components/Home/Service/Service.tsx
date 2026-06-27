@@ -3,7 +3,6 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import gsap from "gsap";
 import { ScrollToPlugin } from "gsap/ScrollToPlugin";
-import HomeLoading from "@/components/HomeLoading";
 import ServiceVideo from "./ServiceVideo";
 import ServiceDefault from "./ServiceDefault";
 
@@ -14,8 +13,6 @@ type View = "VIEW_DEFAULT" | "VIEW_VIDEO";
 const Service = ({ active }: { active: boolean }) => {
   const [isVideoVisible, setIsVideoVisible] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadingProgress, setLoadingProgress] = useState(0);
   const [isReady, setIsReady] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -40,29 +37,9 @@ const Service = ({ active }: { active: boolean }) => {
 
   const targetYFor = (view: View) => (view === "VIEW_DEFAULT" ? window.innerHeight : 0);
 
-  /* ── Loading counter — only runs while this page is active ─────── */
-  useEffect(() => {
-    if (!active) return;
-    const startTime = Date.now();
-    const duration = 2500;
-    const total = 7;
-    let id: number;
-    const run = () => {
-      const p = Math.min(((Date.now() - startTime) / duration) * 100, 100);
-      setLoadingProgress(Math.floor((p / 100) * total));
-      if (p < 100) {
-        id = requestAnimationFrame(run);
-      } else {
-        setTimeout(() => setIsLoading(false), 400);
-      }
-    };
-    id = requestAnimationFrame(run);
-    return () => cancelAnimationFrame(id);
-  }, [active]);
-
   /* ── Deterministic initialization (no setTimeout) ───────────────── */
   useEffect(() => {
-    if (!active || isLoading) {
+    if (!active) {
       setIsReady(false);
       isReadyRef.current = false;
       return;
@@ -99,7 +76,7 @@ const Service = ({ active }: { active: boolean }) => {
       cancelAnimationFrame(raf1);
       cancelAnimationFrame(raf2);
     };
-  }, [active, isLoading]);
+  }, [active]);
 
   /* ── Lock out every native scroll vector ─────────────────────────
      Wheel, touch, and keyboard scrolling are all preventDefault'd at
@@ -194,9 +171,6 @@ const Service = ({ active }: { active: boolean }) => {
       setIsTransitioning(false);
       isTransitioningRef.current = false;
 
-      setIsLoading(true);
-      setLoadingProgress(0);
-
       setIsReady(false);
       isReadyRef.current = false;
 
@@ -219,7 +193,7 @@ const Service = ({ active }: { active: boolean }) => {
 
   /* ── Bell click: ONE master timeline → VIEW_VIDEO ────────────────── */
   const handleBellClick = useCallback(() => {
-    if (!isReadyRef.current || isTransitioningRef.current || isLoading) return;
+    if (!isReadyRef.current || isTransitioningRef.current) return;
     const el = containerRef.current;
     if (!el || !bellRef.current || !ropeRef.current) return;
 
@@ -256,7 +230,7 @@ const Service = ({ active }: { active: boolean }) => {
       );
 
     tlRef.current = tl;
-  }, [isLoading]);
+  }, []);
 
   /* ── Video click: slide back → VIEW_DEFAULT, unmount only after ──── */
   const handleCloseVideo = useCallback(() => {
@@ -298,17 +272,10 @@ const Service = ({ active }: { active: boolean }) => {
     );
   }
 
-  if (isLoading) {
-    return <HomeLoading progress={loadingProgress} totalLetters={7} fullText="Service" />;
-  }
-
   return (
     <div
       ref={containerRef}
       className="w-full h-screen overflow-hidden overscroll-none"
-      // scrollSnapType removed — it still permits user-driven scroll
-      // gestures and conflicts with GSAP-driven positioning. Vertical
-      // position is now exclusively programmatic (see View type above).
       style={{ overflowY: "hidden", overflowX: "hidden" }}
     >
       <ServiceVideo

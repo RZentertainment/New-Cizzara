@@ -13,6 +13,7 @@ import Blog from "@/components/Home/Blog";
 import Clients from "@/components/Home/Clients";
 import Service from "@/components/Home/Service/Service";
 import Reviews from "@/components/Home/Reviews/Reviews";
+import ServiceRotation from "@/components/Home/Service/ServiceRotation";
 
 export default function CizzaraStudioPage() {
   const [isLoading, setIsLoading] = useState(true);
@@ -243,8 +244,6 @@ export default function CizzaraStudioPage() {
           <div className="w-screen h-full flex-shrink-0">
             <About />
           </div>
-
-
 <div className="w-screen h-full flex-shrink-0">
   <Service active={currentPage === 5} /> 
 </div>
@@ -265,6 +264,7 @@ export default function CizzaraStudioPage() {
             <div className="w-screen h-full flex-shrink-0">
           <Clients/>
           </div>
+
          
         </div>
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useEffect, useCallback } from "react";
+import React, { useRef, useState, useEffect, useLayoutEffect, useCallback } from "react";
 import gsap from "gsap";
 import { ScrollToPlugin } from "gsap/ScrollToPlugin";
 import ReviewsList from "./ReviewsList";
@@ -10,7 +10,6 @@ gsap.registerPlugin(ScrollToPlugin);
 
 type View = "VIEW_DEFAULT" | "VIEW_REVIEWS";
 
-// Define reviews data here
 const reviewsData = [
   {
     _id: "6a06fb35c74f851db813e760",
@@ -56,24 +55,68 @@ const Reviews = ({ active }: { active: boolean }) => {
   const [isReady, setIsReady] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLDivElement>(null);
+  const buttonRef    = useRef<HTMLDivElement>(null);
 
-  // Refs mirror state so GSAP callbacks never read stale values
-  const isTransitioningRef = useRef(false);
-  const isReadyRef = useRef(false);
+  const isTransitioningRef  = useRef(false);
+  const isReadyRef          = useRef(false);
   const isReviewsVisibleRef = useRef(false);
-  const tlRef = useRef<gsap.core.Timeline | null>(null);
+  const tlRef               = useRef<gsap.core.Timeline | null>(null);
+  const viewRef             = useRef<View>("VIEW_DEFAULT");
 
-  // Single source of truth for the current panel
-  const viewRef = useRef<View>("VIEW_DEFAULT");
-
-  useEffect(() => { isTransitioningRef.current = isTransitioning; }, [isTransitioning]);
-  useEffect(() => { isReadyRef.current = isReady; }, [isReady]);
+  useEffect(() => { isTransitioningRef.current  = isTransitioning;  }, [isTransitioning]);
+  useEffect(() => { isReadyRef.current          = isReady;          }, [isReady]);
   useEffect(() => { isReviewsVisibleRef.current = isReviewsVisible; }, [isReviewsVisible]);
 
   const targetYFor = (view: View) => (view === "VIEW_DEFAULT" ? window.innerHeight : 0);
 
-  /* ── Deterministic initialization ────────────────────────────────── */
+  // ─── CHANGE 1: useLayoutEffect for instant scroll-to-default on activation ──
+  //
+  // ROOT CAUSE of the 1-second flash:
+  //
+  // When the user navigates TO page 6 (Reviews), `active` flips true.
+  // React re-renders, the `active ? full JSX : placeholder` branch switches,
+  // and the real container div (with ReviewsList at y=0 and ReviewsDefault
+  // at y=windowHeight) is inserted into the DOM.
+  //
+  // The OLD code used useEffect to then scrollTo(windowHeight). But useEffect
+  // fires AFTER the browser has already painted the newly-inserted DOM —
+  // meaning for ~1 frame (sometimes longer due to the RAF retry loop) the
+  // browser shows scroll position y=0, which is exactly where ReviewsList
+  // lives. That's the flash.
+  //
+  // The fix: use useLayoutEffect to set scrollTop = windowHeight
+  // SYNCHRONOUSLY before the browser paints. This way the very first
+  // rendered frame already shows ReviewsDefault, never ReviewsList.
+  //
+  // We still need the RAF retry for the scrollHeight check (the children
+  // need to be laid out before scrollHeight is accurate), but we can do
+  // an optimistic instant snap first, then confirm it once layout settles.
+  useLayoutEffect(() => {
+    if (!active || !containerRef.current) return;
+
+    const el = containerRef.current;
+
+    // ── Optimistic instant snap ──────────────────────────────────────────
+    // At this point layout may not be complete yet (scrollHeight might
+    // still be 0), but we can still write scrollTop. The browser will
+    // clamp it to the valid range — if scrollHeight is already correct
+    // this snaps perfectly; if not, the RAF retry below corrects it.
+    // Either way, the FIRST PAINTED FRAME never shows y=0.
+    el.scrollTop = window.innerHeight;
+
+  }, [active]); // re-runs every time active toggles
+
+
+  // ─── CHANGE 2: Keep the RAF retry for reliable scrollHeight confirmation ──
+  //
+  // The useLayoutEffect above handles the first-paint problem. This effect
+  // handles the edge case where the children haven't finished laying out
+  // yet (scrollHeight < windowHeight * 2). Once layout is confirmed, we
+  // do a final authoritative snap and mark isReady.
+  //
+  // We removed the "scroll to 0 first then to windowHeight" pattern that
+  // existed in the original — that two-step was itself causing a visible
+  // intermediate position.
   useEffect(() => {
     if (!active || !containerRef.current) {
       setIsReady(false);
@@ -98,7 +141,9 @@ const Reviews = ({ active }: { active: boolean }) => {
         raf2 = requestAnimationFrame(() => {
           if (cancelled || !containerRef.current) return;
           viewRef.current = "VIEW_DEFAULT";
-          containerRef.current.scrollTo({ top: window.innerHeight, behavior: "instant" });
+          // Authoritative snap — scrollHeight is now confirmed correct.
+          // This is instant (behavior: "instant"), so no visible movement.
+          containerRef.current.scrollTop = window.innerHeight;
           setIsReady(true);
           isReadyRef.current = true;
         });
@@ -114,48 +159,28 @@ const Reviews = ({ active }: { active: boolean }) => {
     };
   }, [active]);
 
-  /* ── Lock out every native scroll vector ────────────────────────── */
+  /* ── Lock out every native scroll vector (unchanged) ────────────── */
   useEffect(() => {
     const el = containerRef.current;
     if (!el || !active) return;
 
-    const blockWheel = (e: WheelEvent) => {
-      e.preventDefault();
-    };
+    const blockWheel     = (e: WheelEvent)    => { e.preventDefault(); };
+    const blockTouchMove = (e: TouchEvent)    => { e.preventDefault(); };
+    const SCROLL_KEYS = new Set(["ArrowUp","ArrowDown"," ","Spacebar","PageUp","PageDown","Home","End"]);
+    const blockKeys      = (e: KeyboardEvent) => { if (SCROLL_KEYS.has(e.key)) e.preventDefault(); };
 
-    const blockTouchMove = (e: TouchEvent) => {
-      e.preventDefault();
-    };
-
-    const SCROLL_KEYS = new Set([
-      "ArrowUp",
-      "ArrowDown",
-      " ",
-      "Spacebar",
-      "PageUp",
-      "PageDown",
-      "Home",
-      "End",
-    ]);
-
-    const blockKeys = (e: KeyboardEvent) => {
-      if (SCROLL_KEYS.has(e.key)) {
-        e.preventDefault();
-      }
-    };
-
-    el.addEventListener("wheel", blockWheel, { passive: false });
+    el.addEventListener("wheel",     blockWheel,     { passive: false });
     el.addEventListener("touchmove", blockTouchMove, { passive: false });
-    document.addEventListener("keydown", blockKeys, { passive: false });
+    document.addEventListener("keydown", blockKeys,  { passive: false });
 
     return () => {
-      el.removeEventListener("wheel", blockWheel);
+      el.removeEventListener("wheel",     blockWheel);
       el.removeEventListener("touchmove", blockTouchMove);
       document.removeEventListener("keydown", blockKeys);
     };
   }, [active]);
 
-  /* ── Drift correction ────────────────────────────────────────────── */
+  /* ── Drift correction (unchanged) ───────────────────────────────── */
   useEffect(() => {
     const el = containerRef.current;
     if (!el || !active || !isReady) return;
@@ -164,23 +189,20 @@ const Reviews = ({ active }: { active: boolean }) => {
       if (isTransitioningRef.current || !containerRef.current) return;
       const expected = targetYFor(viewRef.current);
       if (Math.abs(containerRef.current.scrollTop - expected) > 1) {
-        containerRef.current.scrollTo({ top: expected, behavior: "instant" });
+        containerRef.current.scrollTop = expected;
       }
     };
 
-    const onResize = () => correctDrift();
-    const onScroll = () => correctDrift();
-
-    window.addEventListener("resize", onResize);
-    el.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", correctDrift);
+    el.addEventListener("scroll", correctDrift, { passive: true });
 
     return () => {
-      window.removeEventListener("resize", onResize);
-      el.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", correctDrift);
+      el.removeEventListener("scroll", correctDrift);
     };
   }, [active, isReady]);
 
-  /* ── Reset everything when this page goes inactive ──────────────── */
+  /* ── Reset when inactive (unchanged) ────────────────────────────── */
   useEffect(() => {
     if (!active) {
       tlRef.current?.kill();
@@ -197,19 +219,21 @@ const Reviews = ({ active }: { active: boolean }) => {
 
       viewRef.current = "VIEW_DEFAULT";
 
+      // ── CHANGE 3: Reset scroll to 0 only when going INACTIVE ─────────
+      //
+      // The original reset also set scroll to 0 here. That's correct —
+      // when the page is inactive the container is hidden anyway, so
+      // resetting to 0 is fine and prepares it for the next activation
+      // where useLayoutEffect will immediately snap it to windowHeight.
       if (containerRef.current) {
-        containerRef.current.scrollTo({ top: 0, behavior: "instant" });
+        containerRef.current.scrollTop = 0;
       }
     }
   }, [active]);
 
-  useEffect(() => {
-    return () => {
-      tlRef.current?.kill();
-    };
-  }, []);
+  useEffect(() => { return () => { tlRef.current?.kill(); }; }, []);
 
-  /* ── Reviews click: transition to VIEW_REVIEWS ──────────────────── */
+  /* ── Reviews click (unchanged) ──────────────────────────────────── */
   const handleReviewsClick = useCallback(() => {
     if (!isReadyRef.current || isTransitioningRef.current) return;
     const el = containerRef.current;
@@ -217,7 +241,6 @@ const Reviews = ({ active }: { active: boolean }) => {
 
     isTransitioningRef.current = true;
     setIsTransitioning(true);
-
     tlRef.current?.kill();
 
     const tl = gsap.timeline({
@@ -230,16 +253,11 @@ const Reviews = ({ active }: { active: boolean }) => {
       },
     });
 
-    tl.to(el, {
-      duration: 1.9,
-      scrollTo: { y: 0 },
-      ease: "power4.inOut",
-    });
-
+    tl.to(el, { duration: 1.9, scrollTo: { y: 0 }, ease: "power4.inOut" });
     tlRef.current = tl;
   }, []);
 
-  /* ── Close reviews: transition back to VIEW_DEFAULT ────────────── */
+  /* ── Close reviews (unchanged) ──────────────────────────────────── */
   const handleCloseReviews = useCallback(() => {
     if (!isReadyRef.current || isTransitioningRef.current || !isReviewsVisibleRef.current) return;
     const el = containerRef.current;
@@ -247,7 +265,6 @@ const Reviews = ({ active }: { active: boolean }) => {
 
     isTransitioningRef.current = true;
     setIsTransitioning(true);
-
     tlRef.current?.kill();
 
     const tl = gsap.timeline({
@@ -260,15 +277,11 @@ const Reviews = ({ active }: { active: boolean }) => {
       },
     });
 
-    tl.to(el, {
-      duration: 1.9,
-      scrollTo: { y: window.innerHeight },
-      ease: "power4.inOut",
-    });
-
+    tl.to(el, { duration: 1.9, scrollTo: { y: window.innerHeight }, ease: "power4.inOut" });
     tlRef.current = tl;
   }, []);
 
+  /* ── Inactive placeholder (unchanged) ───────────────────────────── */
   if (!active) {
     return (
       <div className="w-screen h-screen bg-black flex items-center justify-center">
