@@ -13,7 +13,12 @@ import Blog from "@/components/Home/Blog";
 import Clients from "@/components/Home/Clients";
 import Service from "@/components/Home/Service/Service";
 import Reviews from "@/components/Home/Reviews/Reviews";
-import ServiceRotation from "@/components/Home/Service/ServiceRotation";
+import Contact from "@/components/Home/Contact";
+
+import Work from "@/components/Works/Work";
+
+
+
 
 export default function CizzaraStudioPage() {
   const [isLoading, setIsLoading] = useState(true);
@@ -39,8 +44,8 @@ export default function CizzaraStudioPage() {
     isAnimatingRef.current = isAnimating;
   }, [isAnimating]);
 
-  const totalPages = 11; // Updated to 5 pages (0, 1, 2, 3, 4)
-  const fullText = "CizzaraStudio";
+  const totalPages = 12; // Updated to 13 pages (0 to 12)
+  const fullText = "CizzaraStudios";
   const totalLetters = fullText.length;
 
   // Loading animation
@@ -254,7 +259,7 @@ export default function CizzaraStudioPage() {
             <ShowReel />
           </div>
           <div className="w-screen h-full flex-shrink-0">
-            <Focuse />
+            <Work/>
           </div>
 
   <div className="w-screen h-full flex-shrink-0">
@@ -263,8 +268,10 @@ export default function CizzaraStudioPage() {
 
             <div className="w-screen h-full flex-shrink-0">
           <Clients/>
+          </div> 
+          <div className="w-screen h-full flex-shrink-0">
+            <Contact/>
           </div>
-
          
         </div>
       </div>

@@ -56,6 +56,8 @@ const Reviews = ({ active }: { active: boolean }) => {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRef    = useRef<HTMLDivElement>(null);
+  // ── NEW: ref to the ReviewsList section so we can hide it before paint ──
+  const reviewsListSectionRef = useRef<HTMLElement>(null);
 
   const isTransitioningRef  = useRef(false);
   const isReadyRef          = useRef(false);
@@ -69,54 +71,34 @@ const Reviews = ({ active }: { active: boolean }) => {
 
   const targetYFor = (view: View) => (view === "VIEW_DEFAULT" ? window.innerHeight : 0);
 
-  // ─── CHANGE 1: useLayoutEffect for instant scroll-to-default on activation ──
+  // ── NEW: hide ReviewsList section before first paint when active ─────────
   //
-  // ROOT CAUSE of the 1-second flash:
+  // ReviewsList is always in the DOM (at scroll y=0), so when the container
+  // snaps to windowHeight on activation there is a 1-frame window where
+  // the browser paints y=0 before the snap completes — showing ReviewsList.
   //
-  // When the user navigates TO page 6 (Reviews), `active` flips true.
-  // React re-renders, the `active ? full JSX : placeholder` branch switches,
-  // and the real container div (with ReviewsList at y=0 and ReviewsDefault
-  // at y=windowHeight) is inserted into the DOM.
+  // Fix: useLayoutEffect runs synchronously before paint. We set
+  // visibility:hidden on the ReviewsList section immediately. It becomes
+  // visible again only in handleReviewsClick (when the user explicitly
+  // opens it) and is re-hidden in handleCloseReviews onComplete.
   //
-  // The OLD code used useEffect to then scrollTo(windowHeight). But useEffect
-  // fires AFTER the browser has already painted the newly-inserted DOM —
-  // meaning for ~1 frame (sometimes longer due to the RAF retry loop) the
-  // browser shows scroll position y=0, which is exactly where ReviewsList
-  // lives. That's the flash.
-  //
-  // The fix: use useLayoutEffect to set scrollTop = windowHeight
-  // SYNCHRONOUSLY before the browser paints. This way the very first
-  // rendered frame already shows ReviewsDefault, never ReviewsList.
-  //
-  // We still need the RAF retry for the scrollHeight check (the children
-  // need to be laid out before scrollHeight is accurate), but we can do
-  // an optimistic instant snap first, then confirm it once layout settles.
+  // We use `visibility` (not `display` or `opacity`) so the element still
+  // occupies space in the layout — keeping scrollHeight = 2×windowHeight
+  // which the RAF retry loop depends on.
+  useLayoutEffect(() => {
+    if (!active) return;
+    if (reviewsListSectionRef.current && !isReviewsVisibleRef.current) {
+      reviewsListSectionRef.current.style.visibility = "hidden";
+    }
+  }, [active]);
+
+  // Optimistic instant snap before paint
   useLayoutEffect(() => {
     if (!active || !containerRef.current) return;
+    containerRef.current.scrollTop = window.innerHeight;
+  }, [active]);
 
-    const el = containerRef.current;
-
-    // ── Optimistic instant snap ──────────────────────────────────────────
-    // At this point layout may not be complete yet (scrollHeight might
-    // still be 0), but we can still write scrollTop. The browser will
-    // clamp it to the valid range — if scrollHeight is already correct
-    // this snaps perfectly; if not, the RAF retry below corrects it.
-    // Either way, the FIRST PAINTED FRAME never shows y=0.
-    el.scrollTop = window.innerHeight;
-
-  }, [active]); // re-runs every time active toggles
-
-
-  // ─── CHANGE 2: Keep the RAF retry for reliable scrollHeight confirmation ──
-  //
-  // The useLayoutEffect above handles the first-paint problem. This effect
-  // handles the edge case where the children haven't finished laying out
-  // yet (scrollHeight < windowHeight * 2). Once layout is confirmed, we
-  // do a final authoritative snap and mark isReady.
-  //
-  // We removed the "scroll to 0 first then to windowHeight" pattern that
-  // existed in the original — that two-step was itself causing a visible
-  // intermediate position.
+  // RAF retry — confirm scrollHeight, authoritative snap, mark isReady
   useEffect(() => {
     if (!active || !containerRef.current) {
       setIsReady(false);
@@ -141,8 +123,6 @@ const Reviews = ({ active }: { active: boolean }) => {
         raf2 = requestAnimationFrame(() => {
           if (cancelled || !containerRef.current) return;
           viewRef.current = "VIEW_DEFAULT";
-          // Authoritative snap — scrollHeight is now confirmed correct.
-          // This is instant (behavior: "instant"), so no visible movement.
           containerRef.current.scrollTop = window.innerHeight;
           setIsReady(true);
           isReadyRef.current = true;
@@ -159,7 +139,7 @@ const Reviews = ({ active }: { active: boolean }) => {
     };
   }, [active]);
 
-  /* ── Lock out every native scroll vector (unchanged) ────────────── */
+  /* ── Lock out every native scroll vector ────────────────────────── */
   useEffect(() => {
     const el = containerRef.current;
     if (!el || !active) return;
@@ -180,7 +160,7 @@ const Reviews = ({ active }: { active: boolean }) => {
     };
   }, [active]);
 
-  /* ── Drift correction (unchanged) ───────────────────────────────── */
+  /* ── Drift correction ───────────────────────────────────────────── */
   useEffect(() => {
     const el = containerRef.current;
     if (!el || !active || !isReady) return;
@@ -202,7 +182,7 @@ const Reviews = ({ active }: { active: boolean }) => {
     };
   }, [active, isReady]);
 
-  /* ── Reset when inactive (unchanged) ────────────────────────────── */
+  /* ── Reset when inactive ────────────────────────────────────────── */
   useEffect(() => {
     if (!active) {
       tlRef.current?.kill();
@@ -219,25 +199,29 @@ const Reviews = ({ active }: { active: boolean }) => {
 
       viewRef.current = "VIEW_DEFAULT";
 
-      // ── CHANGE 3: Reset scroll to 0 only when going INACTIVE ─────────
-      //
-      // The original reset also set scroll to 0 here. That's correct —
-      // when the page is inactive the container is hidden anyway, so
-      // resetting to 0 is fine and prepares it for the next activation
-      // where useLayoutEffect will immediately snap it to windowHeight.
       if (containerRef.current) {
         containerRef.current.scrollTop = 0;
+      }
+
+      // ── NEW: re-hide ReviewsList when navigating away ────────────────
+      if (reviewsListSectionRef.current) {
+        reviewsListSectionRef.current.style.visibility = "hidden";
       }
     }
   }, [active]);
 
   useEffect(() => { return () => { tlRef.current?.kill(); }; }, []);
 
-  /* ── Reviews click (unchanged) ──────────────────────────────────── */
+  /* ── Reviews click ──────────────────────────────────────────────── */
   const handleReviewsClick = useCallback(() => {
     if (!isReadyRef.current || isTransitioningRef.current) return;
     const el = containerRef.current;
     if (!el) return;
+
+    // ── NEW: make ReviewsList visible before scrolling to it ────────────
+    if (reviewsListSectionRef.current) {
+      reviewsListSectionRef.current.style.visibility = "visible";
+    }
 
     isTransitioningRef.current = true;
     setIsTransitioning(true);
@@ -257,7 +241,7 @@ const Reviews = ({ active }: { active: boolean }) => {
     tlRef.current = tl;
   }, []);
 
-  /* ── Close reviews (unchanged) ──────────────────────────────────── */
+  /* ── Close reviews ──────────────────────────────────────────────── */
   const handleCloseReviews = useCallback(() => {
     if (!isReadyRef.current || isTransitioningRef.current || !isReviewsVisibleRef.current) return;
     const el = containerRef.current;
@@ -274,6 +258,10 @@ const Reviews = ({ active }: { active: boolean }) => {
         isReviewsVisibleRef.current = false;
         isTransitioningRef.current = false;
         setIsTransitioning(false);
+        // ── NEW: hide ReviewsList again once scroll back is complete ─────
+        if (reviewsListSectionRef.current) {
+          reviewsListSectionRef.current.style.visibility = "hidden";
+        }
       },
     });
 
@@ -281,7 +269,7 @@ const Reviews = ({ active }: { active: boolean }) => {
     tlRef.current = tl;
   }, []);
 
-  /* ── Inactive placeholder (unchanged) ───────────────────────────── */
+  /* ── Inactive placeholder ───────────────────────────────────────── */
   if (!active) {
     return (
       <div className="w-screen h-screen bg-black flex items-center justify-center">
@@ -297,6 +285,7 @@ const Reviews = ({ active }: { active: boolean }) => {
       style={{ overflowY: "hidden", overflowX: "hidden" }}
     >
       <ReviewsList
+        sectionRef={reviewsListSectionRef}
         isVisible={isReviewsVisible}
         onClose={handleCloseReviews}
         reviews={reviewsData}

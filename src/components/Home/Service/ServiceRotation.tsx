@@ -383,7 +383,7 @@ const ServiceRotation: React.FC = () => {
         />
         <img
           src={CENTER_IMAGE_URL}
-          alt="Cizzara Studio"
+          alt="Cizzara Studios"
           style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', filter: 'brightness(0.88) contrast(1.1) saturate(0.85)' }}
         />
       </div>

@@ -49,9 +49,9 @@ function GooeyDemo() {
 
   return (
     <div
-      className="relative w-full h-full min-h-[600px] flex flex-col items-center justify-center overflow-hidden bg-black"
+      className="relative w-full h-full min-h-[600px] flex flex-col items-center justify-center overflow-hidden bg-[#000000]"
       style={{ cursor: isCompleted ? "default" : "none" }}
-    >
+    > 
       {!isCompleted && <CursorDot />}
 
       <video
@@ -100,7 +100,7 @@ function GooeyDemo() {
         <div className="flex flex-col items-left mt-20 gap-2 md:gap-8">
           {/* Row 1: M A K E */}
           <div className="flex gap-4 md:gap-6 lg:gap-8">
-            {['M', 'A', 'K', 'E'].map((char, index) => (
+            {['W', 'E' , 'A', 'R', 'E'].map((char, index) => (
               <span 
                 key={`row1-${index}`}
                 className="text-white text-3xl md:text-5xl lg:text-5xl tracking-[0.2em] md:tracking-[0.3em] lg:tracking-[0.4em] font-light"
@@ -112,7 +112,7 @@ function GooeyDemo() {
 
           {/* Row 2: T H E - W E B */}
           <div className="flex gap-4 md:gap-6 lg:gap-8">
-            {['T', 'H', 'E'].map((char, index) => (
+            {['D', 'I', 'R','E','C','T'].map((char, index) => (
               <span 
                 key={`row2a-${index}`}
                 className="text-white text-3xl md:text-5xl lg:text-5xl tracking-[0.2em] md:tracking-[0.3em] lg:tracking-[0.4em] font-light"
@@ -121,7 +121,7 @@ function GooeyDemo() {
               </span>
             ))}
             <span className="text-white text-3xl md:text-5xl lg:text-5xl font-light">-</span>
-            {['W', 'E', 'B'].map((char, index) => (
+            {['T','H','E'].map((char, index) => (
               <span 
                 key={`row2b-${index}`}
                 className="text-white text-3xl md:text-5xl lg:text-5xl tracking-[0.2em] md:tracking-[0.3em] lg:tracking-[0.4em] font-light"
@@ -133,9 +133,8 @@ function GooeyDemo() {
 
           {/* Row 3: A - B E T T E R */}
           <div className="flex gap-4 md:gap-6 lg:gap-8">
-            <span className="text-white text-3xl md:text-5xl lg:text-5xl tracking-[0.2em] md:tracking-[0.3em] lg:tracking-[0.4em] font-light">A</span>
-            <span className="text-white text-3xl md:text-5xl lg:text-5xl font-light">-</span>
-            {['B', 'E', 'T', 'T', 'E', 'R'].map((char, index) => (
+           
+            {['E', 'M', 'O','T','I','O','N'].map((char, index) => (
               <span 
                 key={`row3-${index}`}
                 className="text-white text-3xl md:text-5xl lg:text-5xl tracking-[0.2em] md:tracking-[0.3em] lg:tracking-[0.4em] font-light"
@@ -147,7 +146,9 @@ function GooeyDemo() {
 
           {/* Row 4: P L A C E */}
           <div className="flex gap-4 md:gap-6 lg:gap-8">
-            {['P', 'L', 'A', 'C', 'E'].map((char, index) => (
+             <span className="text-white text-3xl md:text-5xl lg:text-5xl tracking-[0.2em] md:tracking-[0.3em] lg:tracking-[0.4em] font-light">IN</span>
+            <span className="text-white text-3xl md:text-5xl lg:text-5xl font-light">-</span>
+            {['M', 'O', 'T', 'I', 'O', 'N'].map((char, index) => (
               <span 
                 key={`row4-${index}`}
                 className="text-white text-3xl md:text-5xl lg:text-5xl tracking-[0.2em] md:tracking-[0.3em] lg:tracking-[0.4em] font-light"

@@ -2,89 +2,54 @@
 
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import gsap from "gsap";
-import { ScrollToPlugin } from "gsap/ScrollToPlugin";
-import ServiceVideo from "./ServiceVideo";
+import ServiceDetailPage from "./ServiceDetailPage";
 import ServiceDefault from "./ServiceDefault";
 
-gsap.registerPlugin(ScrollToPlugin);
-
-type View = "VIEW_DEFAULT" | "VIEW_VIDEO";
+const DETAIL_OPEN_SAFETY_MS = 2500; // if the overlay hasn't visibly resolved by then, treat state as stuck
 
 const Service = ({ active }: { active: boolean }) => {
-  const [isVideoVisible, setIsVideoVisible] = useState(false);
+  // Bell → video flow keeps its own scroll-based view state.
+  const [viewState, setViewState] = useState<"default" | "video">("default");
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [isReady, setIsReady] = useState(false);
+
+  // Card click → detail overlay flow is fully decoupled from the scroll
+  // container. The overlay mounts/unmounts on top of everything and
+  // animates itself (see ServiceDetailPage).
+  const [selectedService, setSelectedService] = useState<any>(null);
+  const [showDetail, setShowDetail] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const bellRef = useRef<HTMLDivElement>(null);
   const ropeRef = useRef<HTMLDivElement>(null);
-
-  // Refs mirror state so GSAP callbacks / rAF loops / event listeners
-  // never read stale values.
-  const isTransitioningRef = useRef(false);
-  const isReadyRef = useRef(false);
-  const isVideoVisibleRef = useRef(false);
   const tlRef = useRef<gsap.core.Timeline | null>(null);
 
-  // Single source of truth for the current panel — programmatic states,
-  // not scroll destinations.
-  const viewRef = useRef<View>("VIEW_DEFAULT");
+  // Tracks when the overlay was last opened, so we can detect and recover
+  // from a "stuck open" state (e.g. the mount animation silently failed
+  // and the panel never became visible, but showDetail is still true).
+  const detailOpenedAtRef = useRef<number | null>(null);
+  const safetyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => { isTransitioningRef.current = isTransitioning; }, [isTransitioning]);
-  useEffect(() => { isReadyRef.current = isReady; }, [isReady]);
-  useEffect(() => { isVideoVisibleRef.current = isVideoVisible; }, [isVideoVisible]);
-
-  const targetYFor = (view: View) => (view === "VIEW_DEFAULT" ? window.innerHeight : 0);
-
-  /* ── Deterministic initialization (no setTimeout) ───────────────── */
+  // Initialize component.
+  // NOTE: containerRef now wraps a single static h-screen panel
+  // (ServiceDefault) — video/detail render as fixed siblings, not inside
+  // this container. There's no multi-panel height to wait for, so we just
+  // flip ready on the next frame once this section is active.
   useEffect(() => {
     if (!active) {
       setIsReady(false);
-      isReadyRef.current = false;
       return;
     }
 
-    let cancelled = false;
-    let raf1 = 0;
-    let raf2 = 0;
-
-    const tryInit = () => {
-      if (cancelled) return;
-      const el = containerRef.current;
-
-      if (!el || el.scrollHeight < window.innerHeight * 2) {
-        raf1 = requestAnimationFrame(tryInit);
-        return;
-      }
-
-      raf2 = requestAnimationFrame(() => {
-        raf2 = requestAnimationFrame(() => {
-          if (cancelled || !containerRef.current) return;
-          viewRef.current = "VIEW_DEFAULT";
-          containerRef.current.scrollTo({ top: window.innerHeight, behavior: "instant" });
-          setIsReady(true);
-          isReadyRef.current = true;
-        });
-      });
-    };
-
-    tryInit();
-
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
-    };
+    const id = requestAnimationFrame(() => {
+      setIsReady(true);
+      console.log("[Service] ready");
+    });
+    return () => cancelAnimationFrame(id);
   }, [active]);
 
-  /* ── Lock out every native scroll vector ─────────────────────────
-     Wheel, touch, and keyboard scrolling are all preventDefault'd at
-     the container (and keyboard at document, since focus may not sit
-     on the container). Listeners are non-passive so preventDefault
-     actually works for wheel/touchmove. None of this interrupts a
-     running GSAP timeline, since GSAP drives scrollTop directly via
-     style/JS, not through a native scroll event. ───────────────────── */
+  // Block scrolling
   useEffect(() => {
     const el = containerRef.current;
     if (!el || !active) return;
@@ -97,7 +62,6 @@ const Service = ({ active }: { active: boolean }) => {
       e.preventDefault();
     };
 
-    // Keys that would otherwise scroll the page/container.
     const SCROLL_KEYS = new Set([
       "ArrowUp",
       "ArrowDown",
@@ -126,87 +90,47 @@ const Service = ({ active }: { active: boolean }) => {
     };
   }, [active]);
 
-  /* ── Drift correction ─────────────────────────────────────────────
-     If anything ever nudges scrollTop away from the current view's
-     resting position (e.g. a resize, or any stray native scroll that
-     slips through), snap it back — but never while a GSAP timeline is
-     actively driving the scroll. ───────────────────────────────────── */
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el || !active || !isReady) return;
-
-    const correctDrift = () => {
-      if (isTransitioningRef.current || !containerRef.current) return;
-      const expected = targetYFor(viewRef.current);
-      if (Math.abs(containerRef.current.scrollTop - expected) > 1) {
-        containerRef.current.scrollTo({ top: expected, behavior: "instant" });
-      }
-    };
-
-    const onResize = () => correctDrift();
-    // Defensive net: catches any scroll event that wasn't preventDefault'd
-    // (e.g. programmatic scrolls from outside this component).
-    const onScroll = () => correctDrift();
-
-    window.addEventListener("resize", onResize);
-    el.addEventListener("scroll", onScroll, { passive: true });
-
-    return () => {
-      window.removeEventListener("resize", onResize);
-      el.removeEventListener("scroll", onScroll);
-    };
-  }, [active, isReady]);
-
-  /* ── Reset everything when this page goes inactive ──────────────── */
+  // Cleanup on deactivation
   useEffect(() => {
     if (!active) {
       tlRef.current?.kill();
       tlRef.current = null;
-
       videoRef.current?.pause();
-
-      setIsVideoVisible(false);
-      isVideoVisibleRef.current = false;
-
+      setViewState("default");
       setIsTransitioning(false);
-      isTransitioningRef.current = false;
-
       setIsReady(false);
-      isReadyRef.current = false;
-
-      viewRef.current = "VIEW_DEFAULT";
-
-      if (bellRef.current) gsap.set(bellRef.current, { y: 0 });
-      if (ropeRef.current) gsap.set(ropeRef.current, { height: 0 });
-
-      if (containerRef.current) {
-        containerRef.current.scrollTo({ top: 0, behavior: "instant" });
+      setShowDetail(false);
+      setSelectedService(null);
+      detailOpenedAtRef.current = null;
+      if (safetyTimeoutRef.current) {
+        clearTimeout(safetyTimeoutRef.current);
+        safetyTimeoutRef.current = null;
       }
     }
   }, [active]);
 
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       tlRef.current?.kill();
+      if (safetyTimeoutRef.current) {
+        clearTimeout(safetyTimeoutRef.current);
+      }
     };
   }, []);
 
-  /* ── Bell click: ONE master timeline → VIEW_VIDEO ────────────────── */
   const handleBellClick = useCallback(() => {
-    if (!isReadyRef.current || isTransitioningRef.current) return;
-    const el = containerRef.current;
-    if (!el || !bellRef.current || !ropeRef.current) return;
+    if (!isReady || isTransitioning || showDetail) return;
+    if (!bellRef.current || !ropeRef.current) return;
 
-    isTransitioningRef.current = true;
     setIsTransitioning(true);
 
     tlRef.current?.kill();
 
     const tl = gsap.timeline({
       onComplete: () => {
-        viewRef.current = "VIEW_VIDEO";
+        setViewState("video");
         videoRef.current?.play().catch(() => {});
-        isTransitioningRef.current = false;
         setIsTransitioning(false);
       },
     });
@@ -214,31 +138,16 @@ const Service = ({ active }: { active: boolean }) => {
     tl.to(ropeRef.current, { height: 30, duration: 0.15, ease: "power1.in" })
       .to(ropeRef.current, { height: 0, duration: 0.15, ease: "power1.out" }, "+=0.05")
       .to(bellRef.current, { y: 15, duration: 0.15, ease: "power1.in" }, "-=0.15")
-      .to(bellRef.current, { y: 0, duration: 0.15, ease: "power1.out" }, "+=0.05")
-      .call(() => {
-        setIsVideoVisible(true);
-        isVideoVisibleRef.current = true;
-      })
-      .to(
-        el,
-        {
-          duration: 1.9,
-          scrollTo: { y: 0 },
-          ease: "power4.inOut",
-        },
-        "-=0.1"
-      );
+      .to(bellRef.current, { y: 0, duration: 0.15, ease: "power1.out" }, "+=0.05");
 
     tlRef.current = tl;
-  }, []);
+  }, [isReady, isTransitioning, showDetail]);
 
-  /* ── Video click: slide back → VIEW_DEFAULT, unmount only after ──── */
   const handleCloseVideo = useCallback(() => {
-    if (!isReadyRef.current || isTransitioningRef.current || !isVideoVisibleRef.current) return;
+    if (!isReady || isTransitioning || viewState !== "video") return;
     const el = containerRef.current;
     if (!el) return;
 
-    isTransitioningRef.current = true;
     setIsTransitioning(true);
 
     tlRef.current?.kill();
@@ -247,10 +156,7 @@ const Service = ({ active }: { active: boolean }) => {
 
     const tl = gsap.timeline({
       onComplete: () => {
-        viewRef.current = "VIEW_DEFAULT";
-        setIsVideoVisible(false);
-        isVideoVisibleRef.current = false;
-        isTransitioningRef.current = false;
+        setViewState("default");
         setIsTransitioning(false);
       },
     });
@@ -262,6 +168,75 @@ const Service = ({ active }: { active: boolean }) => {
     });
 
     tlRef.current = tl;
+  }, [isReady, isTransitioning, viewState]);
+
+  // ── Card click → open cinematic overlay ──────────────────────────────
+  // No scrollTo, no container interaction — ServiceDetailPage mounts
+  // fixed/z-999 above everything and slides itself into view.
+  const handleServiceClick = useCallback(
+    (service: any) => {
+      const now = Date.now();
+      const stuck =
+        showDetail &&
+        detailOpenedAtRef.current !== null &&
+        now - detailOpenedAtRef.current > DETAIL_OPEN_SAFETY_MS;
+
+      console.log("[Service] handleServiceClick called", {
+        service: service?.title,
+        isReady,
+        isTransitioning,
+        showDetail,
+        stuck,
+      });
+
+      if (!isReady || isTransitioning) {
+        console.log("[Service] handleServiceClick BLOCKED by guard (not ready / transitioning)");
+        return;
+      }
+
+      if (showDetail && !stuck) {
+        console.log("[Service] handleServiceClick BLOCKED by guard (already open)");
+        return;
+      }
+
+      if (stuck) {
+        console.warn(
+          "[Service] Detected stuck showDetail state — forcing reset before reopening"
+        );
+      }
+
+      if (safetyTimeoutRef.current) {
+        clearTimeout(safetyTimeoutRef.current);
+      }
+
+      setSelectedService(service);
+      setShowDetail(true);
+      detailOpenedAtRef.current = now;
+
+      // Safety valve: if nothing clears showDetail within the window
+      // (e.g. the overlay's mount animation threw, or it rendered but the
+      // close button never fired due to some other issue), auto-recover
+      // so the UI doesn't lock up permanently.
+      safetyTimeoutRef.current = setTimeout(() => {
+        console.warn(
+          "[Service] showDetail safety timeout fired — this likely means ServiceDetailPage failed to mount/animate correctly. Check for console errors."
+        );
+      }, DETAIL_OPEN_SAFETY_MS);
+    },
+    [isReady, isTransitioning, showDetail]
+  );
+
+  // ── Close overlay ─────────────────────────────────────────────────────
+  // Called by ServiceDetailPage's onComplete, AFTER its slide-up finishes.
+  // We only clear state here — no animation logic lives in the parent.
+  const handleCloseServiceDetail = useCallback(() => {
+    setShowDetail(false);
+    setSelectedService(null);
+    detailOpenedAtRef.current = null;
+    if (safetyTimeoutRef.current) {
+      clearTimeout(safetyTimeoutRef.current);
+      safetyTimeoutRef.current = null;
+    }
   }, []);
 
   if (!active) {
@@ -273,29 +248,35 @@ const Service = ({ active }: { active: boolean }) => {
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="w-full h-screen overflow-hidden overscroll-none"
-      style={{ overflowY: "hidden", overflowX: "hidden" }}
-    >
-      <ServiceVideo
-        isVisible={isVideoVisible}
-        videoRef={videoRef}
-        onClose={handleCloseVideo}
-      />
+    <>
+      {/* Main container with ServiceDefault */}
+      <div
+        ref={containerRef}
+        className="w-full h-screen overflow-hidden overscroll-none"
+        style={{ overflowY: "hidden", overflowX: "hidden" }}
+      >
+        <ServiceDefault
+          bellRef={bellRef}
+          ropeRef={ropeRef}
+          onBellClick={handleBellClick}
+          onServiceClick={handleServiceClick}
+        />
+      </div>
 
-      <ServiceDefault
-        bellRef={bellRef}
-        ropeRef={ropeRef}
-        onBellClick={handleBellClick}
-      />
+      {viewState === "video" && (
+        <ServiceDetailPage isVisible={true} videoRef={videoRef} onClose={handleCloseVideo} />
+      )}
+
+      {showDetail && selectedService && (
+        <ServiceDetailPage service={selectedService} onClose={handleCloseServiceDetail} />
+      )}
 
       <style jsx global>{`
         .cursor-close {
           cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 56 56'%3E%3Cg transform='translate(28,28)'%3E%3Cline x1='-12' y1='-12' x2='12' y2='12' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3Cline x1='12' y1='-12' x2='-12' y2='12' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/g%3E%3C/svg%3E") 28 28, pointer !important;
         }
       `}</style>
-    </div>
+    </>
   );
 };
 
